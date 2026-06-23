@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Info, Layout, Ruler, Grid3X3, Printer, Bot, Sparkles, Loader2, Wrench, Calculator, Coins, SquareDashed } from 'lucide-react';
 
 // API Key được cung cấp tự động bởi môi trường thực thi
-const apiKey = "";
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 // Helper function to call Gemini API with exponential backoff
 const fetchGemini = async (prompt) => {
@@ -12,7 +12,7 @@ const fetchGemini = async (prompt) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
