@@ -248,7 +248,8 @@ export default function App() {
     if (type === 'corner') { r = 0; c = 0; color = "fill-orange-100 stroke-orange-600"; desc = "2 cạnh phẳng để ráp vào góc 90°"; }
     
     return (
-       <div className="flex flex-col h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+       // Thêm class break-inside-avoid để tránh bị cắt đôi khi in PDF
+       <div className="flex flex-col h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow break-inside-avoid">
           <div className="p-4 bg-gray-50 border-b border-gray-200">
              <h4 className="font-bold text-center text-sm text-gray-800">{title}</h4>
              <p className="text-[11px] text-center text-gray-500 mt-1">{desc}</p>
@@ -575,7 +576,8 @@ export default function App() {
                     <BlueprintCard title="3. Tấm Góc (Corner)" type="corner" />
                   </div>
 
-                  <div className="mt-8 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  {/* Thêm class break-inside-avoid để hộp tóm tắt không bị cắt nửa khi in */}
+                  <div className="mt-8 p-4 bg-orange-50 border border-orange-200 rounded-lg break-inside-avoid">
                     <h4 className="font-bold text-orange-800 flex items-center mb-2">
                       <Ruler className="w-4 h-4 mr-2" /> Tóm tắt thông số ngàm Đuôi Én:
                     </h4>
