@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { Info, Layout, Ruler, Grid3X3, Printer, Bot, Sparkles, Loader2, Wrench, Calculator, Coins, SquareDashed } from 'lucide-react';
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+// API Key được cung cấp tự động bởi môi trường thực thi
+const apiKey = "";
 
 // Helper function to call Gemini API with exponential backoff
 const fetchGemini = async (prompt) => {
   const maxRetries = 5;
-  const baseDelay = 1000;
+  const delays = [1000, 2000, 4000, 8000, 16000];
   
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -29,7 +30,7 @@ const fetchGemini = async (prompt) => {
       return data.candidates?.[0]?.content?.parts?.[0]?.text || "Không nhận được phản hồi từ AI.";
     } catch (error) {
       if (i === maxRetries - 1) return `Lỗi kết nối AI: ${error.message}. Vui lòng thử lại sau.`;
-      await new Promise(res => setTimeout(res, baseDelay * Math.pow(2, i)));
+      await new Promise(res => setTimeout(res, delays[i]));
     }
   }
 };
@@ -209,7 +210,7 @@ export default function App() {
     </defs>
   );
 
-  const DimensionLines = ({ type }) => {
+  const DimensionLines = () => {
     return (
       <g>
         <line x1="0" y1="-15" x2="100" y2="-15" className="stroke-red-500 stroke-[0.75px]" markerStart="url(#arrow-red)" markerEnd="url(#arrow-red)" />
@@ -236,29 +237,6 @@ export default function App() {
         <line x1="100" y1="35" x2="100" y2="17" className="stroke-purple-400 stroke-[0.5px] stroke-dasharray-2" />
         <line x1="115" y1="35" x2="115" y2="17" className="stroke-purple-400 stroke-[0.5px] stroke-dasharray-2" />
         <text x="107.5" y="14" textAnchor="middle" className="fill-purple-700 text-[8px] font-mono">45</text>
-
-        {type === 'center' && (
-           <g>
-             <circle cx="20" cy="15" r="2" className="fill-emerald-600" />
-             <polyline points="20,15 10,-5 -5,-5" fill="none" className="stroke-emerald-600 stroke-[0.75px]" />
-             <text x="-8" y="-4" textAnchor="end" className="fill-emerald-700 text-[6px] font-bold">Ngàm âm (Khoét sâu 45mm)</text>
-           </g>
-        )}
-        {type === 'edge' && (
-           <g>
-             <circle cx="50" cy="0" r="2" className="fill-blue-600" />
-             <polyline points="50,0 60,15 90,15" fill="none" className="stroke-blue-600 stroke-[0.75px]" />
-             <text x="92" y="16" textAnchor="start" className="fill-blue-700 text-[6px] font-bold">Cạnh phẳng</text>
-           </g>
-        )}
-        {type === 'corner' && (
-           <g>
-             <circle cx="0" cy="0" r="2" className="fill-orange-600" />
-             <polyline points="0,0 15,15 35,15" fill="none" className="stroke-orange-600 stroke-[0.75px]" />
-             <text x="38" y="14" textAnchor="start" className="fill-orange-700 text-[6px] font-bold">Góc vuông (Nên bo R3-R5)</text>
-             <text x="38" y="22" textAnchor="start" className="fill-orange-600 text-[5px]">Giúp tránh cấn vào rãnh nhôm</text>
-           </g>
-        )}
       </g>
     );
   };
@@ -270,17 +248,17 @@ export default function App() {
     if (type === 'corner') { r = 0; c = 0; color = "fill-orange-100 stroke-orange-600"; desc = "2 cạnh phẳng để ráp vào góc 90°"; }
     
     return (
-       <div className="flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-          <div className="p-3 bg-gray-50 border-b border-gray-200">
+       <div className="flex flex-col h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div className="p-4 bg-gray-50 border-b border-gray-200">
              <h4 className="font-bold text-center text-sm text-gray-800">{title}</h4>
              <p className="text-[11px] text-center text-gray-500 mt-1">{desc}</p>
           </div>
-          <div className="p-6 flex justify-center items-center bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] bg-gray-50">
-             <svg viewBox="0 0 210 180" className="w-full max-w-[260px] drop-shadow-sm">
+          <div className="flex-1 p-6 flex justify-center items-center bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] bg-gray-50">
+             <svg viewBox="0 0 210 180" className="w-full max-w-[260px] drop-shadow-sm mx-auto">
                <SVGDefs />
                <g transform="translate(45, 35)">
                   <path d={getTilePath(r, c, 3, 3)} className={`${color} stroke-[1.5px]`} />
-                  <DimensionLines type={type} />
+                  <DimensionLines />
                </g>
              </svg>
           </div>
@@ -591,7 +569,7 @@ export default function App() {
                   <h2 className="text-lg font-bold mb-2">Bản vẽ kích thước tiêu chuẩn</h2>
                   <p className="text-sm text-gray-500 mb-6">Thông số áp dụng chung cho cả ngàm lồi và ngàm lõm trên tất cả các tấm.</p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-6 lg:gap-8">
                     <BlueprintCard title="1. Tấm Trung Tâm (Center)" type="center" />
                     <BlueprintCard title="2. Tấm Viền (Edge)" type="edge" />
                     <BlueprintCard title="3. Tấm Góc (Corner)" type="corner" />
