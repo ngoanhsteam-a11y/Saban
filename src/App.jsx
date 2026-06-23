@@ -288,7 +288,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6 font-sans bg-gray-100 min-h-screen text-gray-800 print:bg-white print:p-0">
+    // Sử dụng style WebkitPrintColorAdjust để ép trình duyệt in màu nền
+    <div 
+      className="flex flex-col gap-4 p-4 md:p-6 font-sans bg-gray-100 min-h-screen text-gray-800 print:bg-white print:p-0"
+      style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+    >
       
       {/* HEADER & TOGGLES */}
       <div className="flex flex-col xl:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 print:hidden">
