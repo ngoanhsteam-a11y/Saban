@@ -593,8 +593,8 @@ export default function App() {
               )}
             </div>
 
-            {/* RIGHT SIDEBAR: Stats (Only visible in overview or blueprint mode) */}
-            <div className="w-full lg:w-72 flex flex-col gap-4 print:hidden">
+            {/* RIGHT SIDEBAR: Stats (Bỏ class print:hidden để có thể xuất hiện trên PDF) */}
+            <div className="w-full lg:w-72 flex flex-col gap-4 break-inside-avoid print:mt-6 print:w-full">
               <div className="bg-white p-5 rounded-xl shadow-lg border-t-4 border-gray-800">
                 <h3 className="text-lg font-bold mb-4 flex items-center">
                   <Grid3X3 className="w-5 h-5 mr-2 text-gray-700" />
