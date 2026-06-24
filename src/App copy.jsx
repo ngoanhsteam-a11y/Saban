@@ -9,18 +9,18 @@ const fetchGemini = async (prompt) => {
   const maxRetries = 5;
   const delays = [1000, 2000, 4000, 8000, 16000];
   
+  // Gộp system prompt trực tiếp vào văn bản để đảm bảo tương thích hoàn toàn với proxy của hệ thống
+  const fullPrompt = `Chỉ dẫn: Bạn là một kỹ sư cơ khí và chuyên gia thiết kế CNC/Laser chuyên nghiệp. Hãy trả lời ngắn gọn, súc tích, định dạng rõ ràng bằng tiếng Việt.\n\nCâu hỏi của tôi: ${prompt}`;
+
   for (let i = 0; i < maxRetries; i++) {
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: {
-              parts: [{ text: "Bạn là một kỹ sư cơ khí và chuyên gia thiết kế CNC/Laser chuyên nghiệp. Hãy trả lời ngắn gọn, súc tích, định dạng rõ ràng bằng tiếng Việt." }]
-            }
+            contents: [{ role: "user", parts: [{ text: fullPrompt }] }]
           })
         }
       );
