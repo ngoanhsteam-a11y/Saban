@@ -253,7 +253,20 @@ export default function App() {
     </defs>
   );
 
-  const DimensionLines = () => {
+  const typePathParams = {
+    'Trung Tâm (2 Lồi, 2 Lõm)': { r: 1, c: 1, gridR: 3, gridC: 3 },
+    'Viền Dạng 1 (2 Lồi, 1 Lõm)': { r: 0, c: 1, gridR: 3, gridC: 3 },
+    'Viền Dạng 2 (1 Lồi, 2 Lõm)': { r: 2, c: 1, gridR: 3, gridC: 3 },
+    'Góc Dạng 1 (2 Lồi)': { r: 0, c: 0, gridR: 3, gridC: 3 },
+    'Góc Dạng 2 (2 Lõm)': { r: 2, c: 2, gridR: 3, gridC: 3 },
+    'Góc Dạng 3 (1 Lồi, 1 Lõm)': { r: 0, c: 2, gridR: 3, gridC: 3 },
+    'Tấm Hẹp Dạng 1 (1 Lồi)': { r: 0, c: 0, gridR: 1, gridC: 3 },
+    'Tấm Hẹp Dạng 2 (1 Lõm)': { r: 0, c: 2, gridR: 1, gridC: 3 },
+    'Tấm Hẹp Dạng 3 (1 Lồi, 1 Lõm)': { r: 0, c: 1, gridR: 1, gridC: 3 },
+    'Tấm Đơn (4 Cạnh Phẳng)': { r: 0, c: 0, gridR: 1, gridC: 1 }
+  };
+
+  const DimensionLines = ({ showRightDims }) => {
     return (
       <g>
         <line x1="0" y1="-15" x2="100" y2="-15" className="stroke-red-500 stroke-[0.75px]" markerStart="url(#arrow-red)" markerEnd="url(#arrow-red)" />
@@ -266,43 +279,48 @@ export default function App() {
         <line x1="0" y1="100" x2="-18" y2="100" className="stroke-red-400 stroke-[0.5px] stroke-dasharray-2" />
         <text x="-22" y="50" textAnchor="middle" transform="rotate(-90, -22, 50)" className="fill-red-600 text-[8px] font-mono font-bold">300 mm</text>
 
-        <line x1="130" y1="35" x2="130" y2="65" className="stroke-blue-600 stroke-[0.75px]" markerStart="url(#arrow-blue)" markerEnd="url(#arrow-blue)" />
-        <line x1="115" y1="35" x2="133" y2="35" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
-        <line x1="115" y1="65" x2="133" y2="65" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
-        <text x="135" y="50" textAnchor="start" alignmentBaseline="middle" className="fill-blue-700 text-[8px] font-mono">90 mm</text>
+        {showRightDims && (
+          <>
+            <line x1="130" y1="35" x2="130" y2="65" className="stroke-blue-600 stroke-[0.75px]" markerStart="url(#arrow-blue)" markerEnd="url(#arrow-blue)" />
+            <line x1="115" y1="35" x2="133" y2="35" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
+            <line x1="115" y1="65" x2="133" y2="65" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
+            <text x="135" y="50" textAnchor="start" alignmentBaseline="middle" className="fill-blue-700 text-[8px] font-mono">90 mm</text>
 
-        <line x1="85" y1="40" x2="85" y2="60" className="stroke-blue-600 stroke-[0.75px]" markerStart="url(#arrow-blue)" markerEnd="url(#arrow-blue)" />
-        <line x1="100" y1="40" x2="82" y2="40" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
-        <line x1="100" y1="60" x2="82" y2="60" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
-        <text x="75" y="50" textAnchor="end" alignmentBaseline="middle" className="fill-blue-700 text-[8px] font-mono">60</text>
+            <line x1="85" y1="40" x2="85" y2="60" className="stroke-blue-600 stroke-[0.75px]" markerStart="url(#arrow-blue)" markerEnd="url(#arrow-blue)" />
+            <line x1="100" y1="40" x2="82" y2="40" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
+            <line x1="100" y1="60" x2="82" y2="60" className="stroke-blue-400 stroke-[0.5px] stroke-dasharray-2" />
+            <text x="75" y="50" textAnchor="end" alignmentBaseline="middle" className="fill-blue-700 text-[8px] font-mono">60 mm</text>
 
-        <line x1="100" y1="20" x2="115" y2="20" className="stroke-purple-600 stroke-[0.75px]" markerStart="url(#arrow-purple)" markerEnd="url(#arrow-purple)" />
-        <line x1="100" y1="35" x2="100" y2="17" className="stroke-purple-400 stroke-[0.5px] stroke-dasharray-2" />
-        <line x1="115" y1="35" x2="115" y2="17" className="stroke-purple-400 stroke-[0.5px] stroke-dasharray-2" />
-        <text x="107.5" y="14" textAnchor="middle" className="fill-purple-700 text-[8px] font-mono">45</text>
+            <line x1="100" y1="20" x2="115" y2="20" className="stroke-purple-600 stroke-[0.75px]" markerStart="url(#arrow-purple)" markerEnd="url(#arrow-purple)" />
+            <line x1="100" y1="35" x2="100" y2="17" className="stroke-purple-400 stroke-[0.5px] stroke-dasharray-2" />
+            <line x1="115" y1="35" x2="115" y2="17" className="stroke-purple-400 stroke-[0.5px] stroke-dasharray-2" />
+            <text x="107.5" y="14" textAnchor="middle" className="fill-purple-700 text-[8px] font-mono">45 mm</text>
+          </>
+        )}
       </g>
     );
   };
 
-  const BlueprintCard = ({ title, type }) => {
-    let r, c, color, desc;
-    if (type === 'center') { r = 1; c = 1; color = "fill-emerald-100 stroke-emerald-600"; desc = "4 ngàm liên kết (2 lồi, 2 lõm)"; }
-    if (type === 'edge')   { r = 0; c = 1; color = "fill-blue-100 stroke-blue-600"; desc = "1 cạnh phẳng để ốp vào thanh nhôm"; }
-    if (type === 'corner') { r = 0; c = 0; color = "fill-orange-100 stroke-orange-600"; desc = "2 cạnh phẳng để ráp vào góc 90°"; }
+  const BlueprintCard = ({ typeName, count, index }) => {
+    const params = typePathParams[typeName] || { r: 1, c: 1, gridR: 3, gridC: 3 };
+    const rightOut = params.c < params.gridC - 1;
+    const colorClass = getDetailedTileColor(typeName).split(' ')[0] || 'fill-gray-300';
     
     return (
        // Thêm class break-inside-avoid để tránh bị cắt đôi khi in PDF
        <div className="flex flex-col h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow break-inside-avoid">
-          <div className="p-4 bg-gray-50 border-b border-gray-200">
-             <h4 className="font-bold text-center text-sm text-gray-800">{title}</h4>
-             <p className="text-[11px] text-center text-gray-500 mt-1">{desc}</p>
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col items-center">
+             <h4 className="font-bold text-center text-sm text-gray-800">{index + 1}. {typeName}</h4>
+             <span className="mt-2 bg-indigo-100 text-indigo-700 font-bold px-3 py-1 rounded-full text-xs">
+                Số lượng cắt: {count} tấm
+             </span>
           </div>
           <div className="flex-1 p-6 flex justify-center items-center bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] bg-gray-50">
              <svg viewBox="0 0 210 180" className="w-full max-w-[260px] drop-shadow-sm mx-auto">
                <SVGDefs />
                <g transform="translate(45, 35)">
-                  <path d={getTilePath(r, c, 3, 3)} className={`${color} stroke-[1.5px]`} />
-                  <DimensionLines />
+                  <path d={getTilePath(params.r, params.c, params.gridR, params.gridC)} className={`${colorClass} stroke-gray-800 stroke-[1.5px]`} />
+                  <DimensionLines showRightDims={rightOut} />
                </g>
              </svg>
           </div>
@@ -619,13 +637,18 @@ export default function App() {
                 </div>
               ) : (
                 <div>
-                  <h2 className="text-lg font-bold mb-2">Bản vẽ kích thước tiêu chuẩn</h2>
-                  <p className="text-sm text-gray-500 mb-6">Thông số áp dụng chung cho cả ngàm lồi và ngàm lõm trên tất cả các tấm.</p>
+                  <h2 className="text-lg font-bold mb-2">Bản vẽ Bóc tách File cắt CNC</h2>
+                  <p className="text-sm text-gray-500 mb-6">Chi tiết các mẫu biên dạng cần gia công cho kích thước {w}x{h}mm hiện tại. Các mảnh cùng Dạng dùng chung 1 file cắt.</p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-6 lg:gap-8">
-                    <BlueprintCard title="1. Tấm Trung Tâm (Center)" type="center" />
-                    <BlueprintCard title="2. Tấm Viền (Edge)" type="edge" />
-                    <BlueprintCard title="3. Tấm Góc (Corner)" type="corner" />
+                    {displayOrder.filter(type => typeCounts[type] > 0).map((type, index) => (
+                      <BlueprintCard 
+                        key={type}
+                        typeName={type}
+                        count={typeCounts[type]}
+                        index={index}
+                      />
+                    ))}
                   </div>
 
                   {/* Thêm class break-inside-avoid để hộp tóm tắt không bị cắt nửa khi in */}
