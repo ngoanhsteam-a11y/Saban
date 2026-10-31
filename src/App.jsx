@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Layout, Ruler, Bot, Sparkles, Loader2, Wrench, 
-  Calculator, Coins, SquareDashed, Download, CheckCircle2, Layers, ShieldCheck
+  Calculator, Coins, SquareDashed, Download, CheckCircle2, Layers, ShieldCheck, Sliders
 } from 'lucide-react';
 
 // Lấy API Key an toàn cho môi trường Vite & Vercel
@@ -13,7 +13,7 @@ const getApiKey = () => {
   }
 };
 
-// Hàm làm sạch các ký tự Markdown và LaTeX thừa từ phản hồi AI
+// Làm sạch ký tự Markdown và LaTeX thừa từ phản hồi AI
 const cleanAIText = (rawText) => {
   return rawText
     .replace(/\*\*/g, '')
@@ -26,7 +26,7 @@ const cleanAIText = (rawText) => {
     .replace(/^\|.*\|$/gm, (line) => line.replace(/\|/g, ' • ').trim());
 };
 
-// Hàm gọi Gemini API có tự động thử lại khi lỗi 503/429
+// Gọi Gemini API kèm cơ chế tự động thử lại khi lỗi 503/429
 const fetchGemini = async (prompt) => {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -64,12 +64,11 @@ const fetchGemini = async (prompt) => {
 };
 
 // ============================================================================
-// THUẬT TOÁN HÌNH HỌC CHỐNG GÃY GÓC (BO TRÒN CUNG R & NGÀM ĐÔI KHÓA GÓC)
+// THUẬT TOÁN HÌNH HỌC TỐI ƯU RIÊNG CHO TẤM FORMEX (PVC FOAM) & KHUNG NHÔM 2060
 // ============================================================================
 
-// Nội suy bo tròn góc (Corner Fillet) cho đa giác khép kín
-const filletClosedPolygon = (rawVertices, arcSegments = 7) => {
-  // Lọc bỏ các điểm trùng nhau liên tiếp
+// Nội suy bo tròn góc (Corner Fillet) mượt cho đường cắt CNC/Laser
+const filletClosedPolygon = (rawVertices, arcSegments = 8) => {
   const pts = rawVertices.filter((pt, idx) => {
     const prev = rawVertices[(idx - 1 + rawVertices.length) % rawVertices.length];
     return Math.hypot(pt.x - prev.x, pt.y - prev.y) > 1e-3;
@@ -112,20 +111,17 @@ const filletClosedPolygon = (rawVertices, arcSegments = 7) => {
 
     const halfTan = Math.tan(theta / 2);
     let tangentDist = r / halfTan;
-    // Giới hạn chiều dài tiếp tuyến không vượt quá 42% cạnh kề để không chồng lấn cung
-    const maxDist = Math.min(len1, len2) * 0.42;
+    const maxDist = Math.min(len1, len2) * 0.44;
     if (tangentDist > maxDist) {
       tangentDist = maxDist;
     }
     const actualR = tangentDist * halfTan;
 
-    // 2 tiếp điểm đầu và cuối của cung bo
     const t1x = curr.x + u1x * tangentDist;
     const t1y = curr.y + u1y * tangentDist;
     const t2x = curr.x + u2x * tangentDist;
     const t2y = curr.y + u2y * tangentDist;
 
-    // Tâm cung tròn
     const bx = u1x + u2x;
     const by = u1y + u2y;
     const bLen = Math.hypot(bx, by);
@@ -146,16 +142,22 @@ const filletClosedPolygon = (rawVertices, arcSegments = 7) => {
     }
   }
 
-  // Đóng kín đường polyline cho DXF
   if (result.length > 0) {
     result.push([result[0][0], result[0][1]]);
   }
   return result;
 };
 
-// Tạo các đỉnh trên 1 cạnh (Hỗ trợ Ngàm Đôi chống bênh góc & Ngàm Đơn cổ rộng)
+// Tạo đỉnh trên 1 cạnh với 3 chế độ chuyên biệt chống gãy cho Formex
 const getEdgeVertices = (x1, y1, x2, y2, tabType, options) => {
-  const { kerf = 0, jointMode = 'double', tabFillet = 4.5, cornerRadius = 3 } = options;
+  const {
+    kerf = 0.1,
+    jointMode = 'formex_trapezoid',
+    customDepth = 10,
+    customUndercut = -2.5,
+    tabFillet = 4.5,
+    cornerRadius = 3.0
+  } = options;
 
   if (tabType === 0) {
     return [{ x: x2, y: y2, r: cornerRadius }];
@@ -167,70 +169,81 @@ const getEdgeVertices = (x1, y1, x2, y2, tabType, options) => {
   const ux = dx / L;
   const uy = dy / L;
 
-  // Pháp tuyến hướng ra ngoài theo chiều kim đồng hồ
   const nx = -uy * tabType;
   const ny = ux * tabType;
 
-  // Bù dung sai mạch cắt (ngàm dương phình ra +kerf/2, ngàm âm thu hẹp -kerf/2)
+  // Bù tia cắt (dương phình ra +kerf/2, âm thu vào -kerf/2)
   const k = (tabType === 1 ? 1 : -1) * (kerf / 2);
+  const scale = L / 300;
+
+  let positions = [0.27 * L, 0.73 * L];
+  let baseHalfWidth = 30 * scale;
+
+  if (jointMode === 'single_heavy') {
+    // 1 Ngàm đơn bản đại 90mm ở chính giữa
+    positions = [0.5 * L];
+    baseHalfWidth = 44 * scale;
+  } else if (jointMode === 'formex_wave') {
+    // 2 Ngàm sóng bản rộng đàn hồi nhẹ
+    positions = [0.27 * L, 0.73 * L];
+    baseHalfWidth = 24 * scale;
+  } else {
+    // 'formex_trapezoid': 2 Mộng thang chân rộng (Không thắt cổ - chống đứt 100%)
+    positions = [0.27 * L, 0.73 * L];
+    baseHalfWidth = 28 * scale;
+  }
+
+  const depth = customDepth * scale + k;
+  const neckHalf = baseHalfWidth + k;
+  // customUndercut < 0: chân rộng hơn đỉnh (mộng hình thang tự lựa). customUndercut > 0: đỉnh loe nhẹ khóa bấm
+  const headHalf = (baseHalfWidth + customUndercut) * scale + k;
+  const rFillet = Math.min(tabFillet, customDepth * 0.48);
 
   const vertices = [];
-  const scale = L / 300; // Tự động co giãn theo kích thước tấm
-
-  // Tỉ lệ ngàm tối ưu chống gãy: Cổ rộng, độ loe vừa phải (3.5mm - 4.5mm), bo góc R lớn
-  const positions = jointMode === 'double' ? [0.26 * L, 0.74 * L] : [0.5 * L];
-  const depth = (jointMode === 'double' ? 13 : 16) * scale + k;
-  const neckHalf = (jointMode === 'double' ? 19 : 28) * scale + k;
-  const headHalf = (jointMode === 'double' ? 23 : 33) * scale + k;
-  const rFillet = Math.min(tabFillet, depth * 0.45);
 
   positions.forEach((centerPos) => {
-    const p1 = {
-      x: x1 + ux * (centerPos - neckHalf),
-      y: y1 + uy * (centerPos - neckHalf),
-      r: rFillet
-    };
-    const p2 = {
-      x: x1 + ux * (centerPos - headHalf) + nx * depth,
-      y: y1 + uy * (centerPos - headHalf) + ny * depth,
-      r: rFillet
-    };
-    const p3 = {
-      x: x1 + ux * (centerPos + headHalf) + nx * depth,
-      y: y1 + uy * (centerPos + headHalf) + ny * depth,
-      r: rFillet
-    };
-    const p4 = {
-      x: x1 + ux * (centerPos + neckHalf),
-      y: y1 + uy * (centerPos + neckHalf),
-      r: rFillet
-    };
-    vertices.push(p1, p2, p3, p4);
+    vertices.push(
+      {
+        x: x1 + ux * (centerPos - neckHalf),
+        y: y1 + uy * (centerPos - neckHalf),
+        r: rFillet
+      },
+      {
+        x: x1 + ux * (centerPos - headHalf) + nx * depth,
+        y: y1 + uy * (centerPos - headHalf) + ny * depth,
+        r: rFillet
+      },
+      {
+        x: x1 + ux * (centerPos + headHalf) + nx * depth,
+        y: y1 + uy * (centerPos + headHalf) + ny * depth,
+        r: rFillet
+      },
+      {
+        x: x1 + ux * (centerPos + neckHalf),
+        y: y1 + uy * (centerPos + neckHalf),
+        r: rFillet
+      }
+    );
   });
 
-  // Đỉnh kết thúc cạnh (góc tấm)
   vertices.push({ x: x2, y: y2, r: cornerRadius });
   return vertices;
 };
 
-// Sinh biên dạng hoàn chỉnh cho 1 tấm ghép
+// Sinh biên dạng hoàn chỉnh cho 1 tấm
 const generateTilePoints = (size, edges, offsetX = 0, offsetY = 0, options = {}) => {
   const [top, right, bottom, left] = edges;
   const rawVertices = [];
 
-  // 1. Cạnh Trái: (0,0) -> (0, size)
   rawVertices.push(...getEdgeVertices(offsetX, offsetY, offsetX, offsetY + size, left, options));
-  // 2. Cạnh Trên: (0, size) -> (size, size)
   rawVertices.push(...getEdgeVertices(offsetX, offsetY + size, offsetX + size, offsetY + size, top, options));
-  // 3. Cạnh Phải: (size, size) -> (size, 0)
   rawVertices.push(...getEdgeVertices(offsetX + size, offsetY + size, offsetX + size, offsetY, right, options));
-  // 4. Cạnh Dưới: (size, 0) -> (0, 0)
   rawVertices.push(...getEdgeVertices(offsetX + size, offsetY, offsetX, offsetY, bottom, options));
 
-  return filletClosedPolygon(rawVertices, 7);
+  return filletClosedPolygon(rawVertices, 8);
 };
 
-// Xuất chuỗi nội dung file DXF chuẩn AutoCAD R12 (Đơn vị: mm)
+// Tạo nội dung file DXF chuẩn AutoCAD R12 (Đơn vị: mm)
 const buildDXFContent = (polylines) => {
   let dxf = "0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n";
   dxf += "0\nSECTION\n2\nENTITIES\n";
@@ -251,7 +264,6 @@ const buildDXFContent = (polylines) => {
   return dxf;
 };
 
-// Tải file DXF về máy
 const downloadDXFFile = (filename, dxfContent) => {
   const blob = new Blob([dxfContent], { type: 'application/dxf' });
   const url = URL.createObjectURL(blob);
@@ -264,7 +276,6 @@ const downloadDXFFile = (filename, dxfContent) => {
   URL.revokeObjectURL(url);
 };
 
-// Chuyển đổi tọa độ CAD sang đường dẫn SVG hiển thị trên Web
 const pointsToSVGPath = (points, tileSize) => {
   if (!points.length) return '';
   return points.map((pt, idx) => {
@@ -280,15 +291,38 @@ export default function App() {
   const [length, setLength] = useState(1500);
   const [tileSize, setTileSize] = useState(300);
 
-  // Thông số tối ưu cơ khí chống gãy góc
-  const [jointMode, setJointMode] = useState('double'); // 'double' (Ngàm đôi khóa góc) | 'single' (Ngàm đơn Omega)
-  const [tabFillet, setTabFillet] = useState(4.5); // Bán kính bo tròn góc ngàm (mm)
-  const [cornerRadius, setCornerRadius] = useState(3.0); // Bán kính bo 4 góc tấm (mm)
-  const [kerf, setKerf] = useState(0.15); // Bù mạch cắt Laser/CNC (mm)
-  const [material, setMaterial] = useState('Gỗ MDF 5mm (Phổ biến)');
+  // Mặc định chọn chế độ tối ưu nhất cho Formex có khung nhôm 2060
+  const [jointMode, setJointMode] = useState('formex_trapezoid');
+  const [customDepth, setCustomDepth] = useState(10); // Ngàm nông 10mm chống bẩy gãy
+  const [customUndercut, setCustomUndercut] = useState(-2.5); // -2.5mm: Chân rộng hơn đỉnh (không thắt cổ)
+  const [tabFillet, setTabFillet] = useState(4.5);
+  const [cornerRadius, setCornerRadius] = useState(3.0);
+  const [kerf, setKerf] = useState(0.1);
+  const [material, setMaterial] = useState('Nhựa PVC Foam (Formex cứng) 8mm - 10mm');
 
   const [loadingAI, setLoadingAI] = useState({ floor: false, frame: false, mat: false, cost: false });
   const [aiResult, setAiResult] = useState({ floor: '', frame: '', mat: '', cost: '' });
+
+  // Khi người dùng đổi chế độ mẫu ngàm, tự động nạp bộ thông số chuẩn cho chế độ đó
+  const handleSelectJointPreset = (mode) => {
+    setJointMode(mode);
+    if (mode === 'formex_trapezoid') {
+      // Mộng thang chân rộng (Dùng khi có khung nhôm 2060 giữ ngoài) -> Không thắt cổ, tháo lắp siêu bền
+      setCustomDepth(10);
+      setCustomUndercut(-2.5);
+      setTabFillet(4.5);
+    } else if (mode === 'formex_wave') {
+      // Ngàm sóng đàn hồi nhẹ cho Formex (Độ loe chỉ 1.2mm vừa đủ ôm khít mà không rách xốp)
+      setCustomDepth(10);
+      setCustomUndercut(1.2);
+      setTabFillet(4.8);
+    } else if (mode === 'single_heavy') {
+      // Ngàm đơn bản đại 90mm ở giữa
+      setCustomDepth(12);
+      setCustomUndercut(1.5);
+      setTabFillet(5.0);
+    }
+  };
 
   const cols = Math.max(1, Math.round(width / tileSize));
   const rows = Math.max(1, Math.round(length / tileSize));
@@ -311,19 +345,17 @@ export default function App() {
     return [top, right, bottom, left];
   };
 
-  const geoOptions = { kerf, jointMode, tabFillet, cornerRadius };
+  const geoOptions = { kerf, jointMode, customDepth, customUndercut, tabFillet, cornerRadius };
 
-  // Xuất 1 tấm mẫu ra DXF
   const handleExportSingleTileDXF = (name, edges) => {
     const points = generateTilePoints(tileSize, edges, 0, 0, geoOptions);
     const dxfContent = buildDXFContent([{ points, layer: "CUT_OUTLINE", color: 7 }]);
     downloadDXFFile(`${name}_${tileSize}x${tileSize}mm_${jointMode}.dxf`, dxfContent);
   };
 
-  // Xuất toàn bộ các tấm của sa bàn ra 1 file DXF
   const handleExportAllTilesDXF = () => {
     const polylines = [];
-    const spacing = tileSize + 50;
+    const spacing = tileSize + 45;
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -342,7 +374,7 @@ export default function App() {
     }
 
     const dxfContent = buildDXFContent(polylines);
-    downloadDXFFile(`Full_Sa_Ban_Chong_Gay_${actualWidth}x${actualLength}mm.dxf`, dxfContent);
+    downloadDXFFile(`Sa_Ban_Formex_${actualWidth}x${actualLength}mm.dxf`, dxfContent);
   };
 
   const runAIAssistant = async (type, promptText) => {
@@ -364,16 +396,16 @@ export default function App() {
         {/* HEADER */}
         <header className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl md:text-2xl font-bold text-slate-900">
                 Thiết kế Sa Bàn {actualWidth}x{actualLength}mm
               </h1>
-              <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Bản Chống Gãy Góc
+              <span className="px-2.5 py-0.5 text-xs font-bold bg-teal-100 text-teal-800 rounded-full flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> Chuyên Dụng Cho Formex & CNC
               </span>
             </div>
             <p className="text-sm text-slate-500 mt-0.5">
-              Module {tileSize}x{tileSize}mm • Ngàm bo tròn R{tabFillet}mm & Bo góc tấm R{cornerRadius}mm • Xuất CAD (.DXF)
+              Module {tileSize}x{tileSize}mm • Khung nhôm 2060 • Ngàm sâu {customDepth}mm (Độ loe: {customUndercut}mm)
             </p>
           </div>
 
@@ -398,8 +430,8 @@ export default function App() {
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <Ruler className="w-4 h-4" />
-              Cấu hình Ngàm & Xuất DXF
+              <Sliders className="w-4 h-4" />
+              Tối ưu Ngàm Formex & Xuất DXF
             </button>
 
             <button
@@ -427,10 +459,16 @@ export default function App() {
                 Sơ đồ {stats.total} mảnh ghép ({cols}x{rows})
               </h2>
               <p className="text-xs text-slate-500 mb-5 text-center">
-                Biên dạng <strong>{jointMode === 'double' ? 'Ngàm Đôi Bo Tròn (Khóa chặt 4 góc)' : 'Ngàm Đơn Omega Cổ Rộng'}</strong> giúp triệt tiêu ứng suất gây gãy góc
+                Chế độ hiện tại: <strong>
+                  {jointMode === 'formex_trapezoid'
+                    ? 'Mộng Thang Chân Rộng (Chống gãy 100% khi dùng với Khung Nhôm 2060)'
+                    : jointMode === 'formex_wave'
+                    ? 'Ngàm Sóng Đàn Hồi Nhẹ (Độ loe 1.2mm chuyên cho xốp Formex)'
+                    : 'Ngàm Đơn Bản Đại 90mm (Chịu lực cao)'}
+                </strong>
               </p>
 
-              {/* Bộ điều khiển nhanh */}
+              {/* Bộ chọn nhanh */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl mb-6">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
@@ -459,21 +497,22 @@ export default function App() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    Kiểu ngàm chống gãy góc
+                  <label className="block text-xs font-semibold text-teal-700 uppercase mb-1">
+                    Chế độ ngàm tối ưu cho Formex
                   </label>
                   <select
                     value={jointMode}
-                    onChange={(e) => setJointMode(e.target.value)}
-                    className="w-full px-3 py-2 border border-indigo-200 bg-indigo-50/50 text-indigo-900 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    onChange={(e) => handleSelectJointPreset(e.target.value)}
+                    className="w-full px-3 py-2 border border-teal-300 bg-teal-50/60 text-teal-950 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-teal-500 outline-none"
                   >
-                    <option value="double">Ngàm Đôi Bo Tròn (2 ngàm/cạnh - Khóa góc tốt nhất)</option>
-                    <option value="single">Ngàm Đơn Omega Cổ Rộng (1 ngàm lớn/cạnh)</option>
+                    <option value="formex_trapezoid">1. Mộng Thang Chân Rộng (Tối ưu nhất cho Formex + Khung 2060)</option>
+                    <option value="formex_wave">2. Ngàm Sóng Đàn Hồi Nhẹ (Loe 1.2mm - Bấm êm không rách Formex)</option>
+                    <option value="single_heavy">3. Ngàm Đơn Bản Đại 90mm (1 Mộng lớn chính giữa siêu khỏe)</option>
                   </select>
                 </div>
               </div>
 
-              {/* Bản vẽ SVG tổng thể */}
+              {/* Bản vẽ SVG */}
               <div className="w-full flex justify-center overflow-auto p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <svg
                   viewBox={`-30 -30 ${cols * tileSize + 60} ${rows * tileSize + 60}`}
@@ -487,10 +526,8 @@ export default function App() {
                       
                       const fillColor = isCorner ? '#f97316' : isEdge ? '#3b82f6' : '#10b981';
                       const pts = generateTilePoints(tileSize, edges, 0, 0, {
-                        kerf: 0,
-                        jointMode,
-                        tabFillet,
-                        cornerRadius
+                        ...geoOptions,
+                        kerf: 0
                       });
                       const dPath = pointsToSVGPath(pts, tileSize);
 
@@ -522,7 +559,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cột phải: Thống kê & Xuất DXF */}
+            {/* Cột phải */}
             <div className="space-y-6">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
@@ -562,18 +599,18 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl shadow-md p-6 text-white">
+              <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-2xl shadow-md p-6 text-white">
                 <h3 className="text-base font-bold flex items-center gap-2 mb-2">
                   <Download className="w-5 h-5" />
-                  Xuất File CAD (.DXF) Chống Gãy
+                  Xuất File CAD (.DXF) Cho Formex
                 </h3>
-                <p className="text-xs text-indigo-100 mb-4 leading-relaxed">
-                  Bản vẽ xuất ra đã được <strong>bo tròn cổ ngàm R{tabFillet}mm</strong> và <strong>bo góc tấm R{cornerRadius}mm</strong>, sẵn sàng đưa vào máy cắt CNC / Laser.
+                <p className="text-xs text-teal-100 mb-4 leading-relaxed">
+                  Biên dạng ngàm đã triệt tiêu hoàn toàn cổ thắt hẹp, giúp cắt trên <strong>Formex 5mm - 10mm</strong> tháo lắp liên tục không bị gập hay rách mộng.
                 </p>
 
                 <button
                   onClick={handleExportAllTilesDXF}
-                  className="w-full py-3 px-4 bg-white text-indigo-700 hover:bg-indigo-50 font-bold text-sm rounded-xl shadow transition flex items-center justify-center gap-2 mb-2.5"
+                  className="w-full py-3 px-4 bg-white text-teal-800 hover:bg-teal-50 font-bold text-sm rounded-xl shadow transition flex items-center justify-center gap-2 mb-2.5"
                 >
                   <Download className="w-4 h-4" />
                   Tải trọn bộ {stats.total} tấm (.DXF)
@@ -581,9 +618,9 @@ export default function App() {
 
                 <button
                   onClick={() => setActiveTab('cnc')}
-                  className="w-full py-2.5 px-4 bg-indigo-500/40 hover:bg-indigo-500/60 text-white font-medium text-xs rounded-xl transition flex items-center justify-center gap-1"
+                  className="w-full py-2.5 px-4 bg-teal-900/40 hover:bg-teal-900/60 text-white font-medium text-xs rounded-xl transition flex items-center justify-center gap-1"
                 >
-                  Tùy chỉnh thông số bo góc R & tải lẻ từng mẫu →
+                  Tinh chỉnh độ sâu & độ loe ngàm theo ý muốn →
                 </button>
               </div>
             </div>
@@ -591,81 +628,84 @@ export default function App() {
         )}
 
         {/* =================================================================
-            TAB 2: CẤU HÌNH NGÀM CHỐNG GÃY & XUẤT DXF CHI TIẾT
+            TAB 2: TỐI ƯU NGÀM FORMEX & XUẤT DXF CHI TIẾT
         ================================================================= */}
         {activeTab === 'cnc' && (
           <div className="space-y-6">
             
-            {/* Bảng điều khiển thông số cơ khí */}
+            {/* Bảng điều khiển cơ khí */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <Ruler className="w-5 h-5 text-indigo-600" />
-                    Tinh chỉnh Cơ khí Chống Gãy Góc & Xuất File .DXF
+                    <Sliders className="w-5 h-5 text-teal-600" />
+                    Bảng Tinh Chỉnh Cơ Khí Chuyên Dụng Cho Tấm Formex
                   </h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Tối ưu hóa bán kính bo góc ngàm (Fillet) và khoảng cách khóa góc để tăng độ bền gấp 3 lần
+                    Điều chỉnh trực tiếp <strong>Độ loe khóa (Undercut)</strong> và <strong>Độ sâu ngàm</strong> để phù hợp với độ mềm của Formex
                   </p>
                 </div>
 
                 <button
                   onClick={handleExportAllTilesDXF}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl shadow-sm transition shrink-0"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm rounded-xl shadow-sm transition shrink-0"
                 >
                   <Download className="w-4 h-4" />
                   Xuất toàn bộ {stats.total} tấm (.DXF)
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    1. Kiểu kết cấu ngàm
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="bg-teal-50/70 p-3.5 rounded-xl border border-teal-200 lg:col-span-2">
+                  <label className="block text-xs font-bold text-teal-900 mb-1">
+                    1. Chế độ Ngàm Formex (3 Preset chuẩn)
                   </label>
                   <select
                     value={jointMode}
-                    onChange={(e) => setJointMode(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-indigo-700"
+                    onChange={(e) => handleSelectJointPreset(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white border border-teal-300 rounded-lg text-sm font-semibold text-teal-800"
                   >
-                    <option value="double">Ngàm Đôi (Khóa góc chống bênh)</option>
-                    <option value="single">Ngàm Đơn Omega (Cổ rộng)</option>
+                    <option value="formex_trapezoid">Mộng Thang Chân Rộng (Có khung nhôm 2060)</option>
+                    <option value="formex_wave">Ngàm Sóng Đàn Hồi Nhẹ (Loe 1.2mm)</option>
+                    <option value="single_heavy">Ngàm Đơn Bản Đại 90mm (1 Mộng Giữa)</option>
                   </select>
                 </div>
 
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    2. Bo tròn góc ngàm R (mm)
+                    2. Độ sâu ngàm (mm)
                   </label>
                   <input
                     type="number"
-                    step="0.5"
-                    min="1"
-                    max="6"
-                    value={tabFillet}
-                    onChange={(e) => setTabFillet(Number(e.target.value) || 0)}
+                    step="1"
+                    min="6"
+                    max="18"
+                    value={customDepth}
+                    onChange={(e) => setCustomDepth(Number(e.target.value) || 10)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-indigo-700"
                   />
+                  <span className="text-[11px] text-slate-400">Khuyên dùng: 8 - 10mm</span>
                 </div>
 
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    3. Bo tròn 4 góc tấm R (mm)
+                    3. Độ loe khóa (mm)
                   </label>
                   <input
                     type="number"
                     step="0.5"
-                    min="0"
-                    max="10"
-                    value={cornerRadius}
-                    onChange={(e) => setCornerRadius(Number(e.target.value) || 0)}
+                    min="-5"
+                    max="4"
+                    value={customUndercut}
+                    onChange={(e) => setCustomUndercut(Number(e.target.value))}
                     className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-indigo-700"
                   />
+                  <span className="text-[11px] text-slate-400">Âm (-): Mộng thang | Dương (+): Khóa</span>
                 </div>
 
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    4. Bù tia cắt Kerf (mm)
+                    4. Bù dao/tia cắt Kerf (mm)
                   </label>
                   <input
                     type="number"
@@ -676,33 +716,34 @@ export default function App() {
                     onChange={(e) => setKerf(Number(e.target.value) || 0)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-indigo-700"
                   />
+                  <span className="text-[11px] text-slate-400">Formex nên để 0.05 - 0.1mm</span>
                 </div>
               </div>
             </div>
 
-            {/* 3 Mẫu biên dạng chi tiết */}
+            {/* 3 Mẫu biên dạng */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
                 {
                   title: '1. Mẫu Tấm Trung Tâm',
-                  desc: `Cần cắt: ${stats.centers} tấm (4 cạnh ngàm bo tròn)`,
-                  filename: 'Mau_Tam_Trung_Tam_Chong_Gay',
+                  desc: `Số lượng: ${stats.centers} tấm (4 cạnh mộng Formex)`,
+                  filename: 'Tam_Trung_Tam_Formex',
                   edges: [-1, 1, 1, -1],
                   badgeColor: 'bg-emerald-100 text-emerald-800',
                   strokeColor: '#059669'
                 },
                 {
-                  title: '2. Mẫu Tấm Viền (Cạnh biên)',
-                  desc: `Cần cắt: ${stats.edges} tấm (1 cạnh phẳng, 3 cạnh ngàm)`,
-                  filename: 'Mau_Tam_Vien_Chong_Gay',
+                  title: '2. Mẫu Tấm Viền (Sát khung 2060)',
+                  desc: `Số lượng: ${stats.edges} tấm (1 cạnh phẳng tựa khung nhôm)`,
+                  filename: 'Tam_Vien_Formex',
                   edges: [0, 1, 1, -1],
                   badgeColor: 'bg-blue-100 text-blue-800',
                   strokeColor: '#2563eb'
                 },
                 {
-                  title: '3. Mẫu Tấm Góc',
-                  desc: `Cần cắt: ${stats.corners} tấm (2 cạnh phẳng, 2 cạnh ngàm)`,
-                  filename: 'Mau_Tam_Goc_Chong_Gay',
+                  title: '3. Mẫu Tấm Góc (Góc khung 2060)',
+                  desc: `Số lượng: ${stats.corners} tấm (2 cạnh phẳng góc khung nhôm)`,
+                  filename: 'Tam_Goc_Formex',
                   edges: [0, 1, 1, 0],
                   badgeColor: 'bg-orange-100 text-orange-800',
                   strokeColor: '#ea580c'
@@ -715,7 +756,7 @@ export default function App() {
                   <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
                     <div>
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mb-2 ${item.badgeColor}`}>
-                        Bo ngàm R{tabFillet} • Bo góc tấm R{cornerRadius}
+                        Sâu {customDepth}mm • Độ loe {customUndercut}mm
                       </span>
                       <h3 className="text-base font-bold text-slate-900">{item.title}</h3>
                       <p className="text-xs text-slate-500 mt-1 mb-4">{item.desc}</p>
@@ -755,14 +796,13 @@ export default function App() {
               })}
             </div>
 
-            {/* Giải thích kỹ thuật */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-950 flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            {/* Giải thích kỹ thuật cho Formex */}
+            <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 text-xs text-teal-950 flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="font-bold">Cải tiến kỹ thuật giúp chống gãy góc tuyệt đối:</p>
-                <p>• <strong>Ngàm Đôi Khóa Góc:</strong> Đặt 2 ngàm cách mép góc tấm 75mm giúp triệt tiêu hiện tượng bập bênh góc tấm khi có lực đè lên mặt sa bàn.</p>
-                <p>• <strong>Bo tròn cung tiếp tuyến R{tabFillet}mm:</strong> Thay thế toàn bộ góc nhọn bằng đường cong lượn mượt, giúp phôi Gỗ MDF, Formex hoặc Mica không bị nứt xé tại cổ ngàm.</p>
-                <p>• <strong>Bo góc đỉnh tấm R{cornerRadius}mm:</strong> Loại bỏ mũi nhọn 90° ở 4 góc tấm, chống mẻ góc khi va chạm hoặc tháo lắp liên tục.</p>
+                <p className="font-bold">Vì sao thiết kế này giải quyết triệt để lỗi gãy góc trên Formex?</p>
+                <p>• <strong>Khi để Độ loe âm (-2.5mm - Mộng Thang Chân Rộng):</strong> Phần gốc nối với thân tấm rộng tới 60mm và thuôn nhẹ về phía đỉnh. Khi đặt nằm trong <strong>khung nhôm 2060</strong>, 4 thanh nhôm viền đã khóa chặt toàn bộ sàn không cho chạy ngang, còn các mộng thang giữ cho mặt sàn phẳng tuyệt đối và tháo lắp nhẹ nhàng mà <strong>không bao giờ bị đứt cổ mộng</strong>.</p>
+                <p>• <strong>Khi để Độ loe dương nhỏ (+1.2mm - Ngàm Sóng Đàn Hồi):</strong> Chỉ tạo độ gài 1.2mm vừa đúng giới hạn đàn hồi của nhựa bọt Formex, giúp ấn sập xuống nhẹ nhàng mà không làm gập trắng hay rách tai ngàm.</p>
               </div>
             </div>
           </div>
@@ -774,21 +814,20 @@ export default function App() {
         {activeTab === 'ai' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Box 1 */}
             <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-6 space-y-4">
               <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg border-b border-slate-100 pb-3">
                 <Calculator className="w-5 h-5" />
-                Kỹ sư Tính toán Sàn
+                Kỹ sư Tính toán Sàn Formex
               </div>
               <p className="text-sm text-slate-600">
-                Tính toán số lượng tấm ván nguyên khổ 1220x2440mm cần mua và cách xếp phôi (nesting) tối ưu cho thiết kế ngàm bo tròn.
+                Tính toán số lượng tấm Formex nguyên khổ 1220x2440mm cần mua và cách xếp phôi (nesting) tiết kiệm nhất.
               </p>
               <button
                 disabled={loadingAI.floor}
                 onClick={() =>
                   runAIAssistant(
                     'floor',
-                    `Tôi cần làm sàn sa bàn kích thước ${actualWidth}x${actualLength}mm ghép từ ${stats.total} tấm vuông ${tileSize}x${tileSize}mm (${stats.centers} tấm trung tâm, ${stats.edges} tấm viền, ${stats.corners} tấm góc) có ngàm lồi ra 13mm. Hãy tính số lượng tấm ván khổ 1220x2440mm cần mua và hướng dẫn cách xếp phôi (nesting) để cắt tiết kiệm vật liệu nhất.`
+                    `Tôi cần cắt sàn sa bàn kích thước ${actualWidth}x${actualLength}mm bằng tấm Formex ghép từ ${stats.total} tấm vuông ${tileSize}x${tileSize}mm (${stats.centers} tấm trung tâm, ${stats.edges} tấm viền, ${stats.corners} tấm góc) có mộng nhô ra ${customDepth}mm. Hãy tính số lượng tấm Formex chuẩn khổ 1220x2440mm cần mua và cách xếp phôi tối ưu.`
                   )
                 }
                 className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition"
@@ -803,7 +842,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Box 2 */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
               <div className="flex items-center gap-2 text-slate-800 font-bold text-lg border-b border-slate-100 pb-3">
                 <SquareDashed className="w-5 h-5" />
@@ -832,37 +870,36 @@ export default function App() {
               )}
             </div>
 
-            {/* Box 3 */}
             <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 p-6 space-y-4">
               <div className="flex items-center gap-2 text-indigo-700 font-bold text-lg border-b border-slate-100 pb-3">
                 <Wrench className="w-5 h-5" />
-                Chuyên gia Vật liệu Sàn
+                Chuyên gia Gia công Formex
               </div>
               <p className="text-sm text-slate-600">
-                Phân tích độ bền chịu lực của ngàm bo tròn R{tabFillet}mm và thông số bù mạch cắt (Kerf) chuẩn cho từng loại vật liệu.
+                Phân tích kỹ thuật cắt CNC (dao phay) hoặc Laser trên vật liệu bạn chọn để mép mộng không bị cháy hoặc xơ bavia.
               </p>
               <select
                 value={material}
                 onChange={(e) => setMaterial(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium bg-white"
               >
-                <option>Gỗ MDF 5mm (Phổ biến)</option>
-                <option>Gỗ Plywood (Ván ép) 6mm - 8mm (Siêu bền)</option>
                 <option>Nhựa PVC Foam (Formex cứng) 8mm - 10mm</option>
-                <option>Mica (Acrylic) 5mm</option>
+                <option>Nhựa PVC Foam (Formex) 5mm</option>
+                <option>Gỗ MDF 5mm (Phổ biến)</option>
+                <option>Gỗ Plywood (Ván ép) 6mm - 8mm</option>
               </select>
               <button
                 disabled={loadingAI.mat}
                 onClick={() =>
                   runAIAssistant(
                     'mat',
-                    `Tôi cắt các mảnh ghép sàn sa bàn ${tileSize}x${tileSize}mm dùng thiết kế Ngàm Đôi Bo Tròn R${tabFillet}mm bằng vật liệu "${material}". Hãy đánh giá độ bền chống gãy góc của loại vật liệu này, lưu ý khi gia công Laser/CNC và gợi ý thông số bù mạch cắt (Kerf) chuẩn xác.`
+                    `Tôi gia công các tấm ghép sàn sa bàn ${tileSize}x${tileSize}mm bằng vật liệu "${material}" với mộng sâu ${customDepth}mm, độ loe ${customUndercut}mm. Hãy tư vấn nên cắt bằng máy CNC (dao xoắn 1 me) hay máy Laser, cách chọn thông số cắt và dung sai để lắp ghép khít, bền đẹp nhất.`
                   )
                 }
                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition"
               >
                 {loadingAI.mat ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                Phân tích Vật liệu ✨
+                Phân tích Gia công ✨
               </button>
               {aiResult.mat && (
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm whitespace-pre-line leading-relaxed">
@@ -871,21 +908,20 @@ export default function App() {
               )}
             </div>
 
-            {/* Box 4 */}
             <div className="bg-white rounded-2xl shadow-sm border border-amber-100 p-6 space-y-4">
               <div className="flex items-center gap-2 text-amber-700 font-bold text-lg border-b border-slate-100 pb-3">
                 <Coins className="w-5 h-5" />
                 Chuyên gia Báo giá
               </div>
               <p className="text-sm text-slate-600">
-                Ước tính chi phí vật tư và gia công cắt CNC/Laser cho bộ sa bàn ({actualWidth}x{actualLength}mm) bằng {material} kèm khung nhôm 2060.
+                Ước tính chi phí vật tư và gia công cắt CNC cho bộ sa bàn ({actualWidth}x{actualLength}mm) bằng {material} kèm khung nhôm 2060.
               </p>
               <button
                 disabled={loadingAI.cost}
                 onClick={() =>
                   runAIAssistant(
                     'cost',
-                    `Hãy lập dự toán chi phí vật tư và gia công tại Việt Nam (VNĐ) cho 1 bộ sa bàn kích thước ${actualWidth}x${actualLength}mm gồm: ${stats.total} tấm sàn (${tileSize}x${tileSize}mm) bằng "${material}" cắt theo file DXF, cộng với bộ khung viền nhôm định hình 2060 bao quanh.`
+                    `Hãy lập dự toán chi phí vật tư và gia công tại Việt Nam (VNĐ) cho 1 bộ sa bàn kích thước ${actualWidth}x${actualLength}mm gồm: ${stats.total} tấm sàn (${tileSize}x${tileSize}mm) bằng "${material}" cắt CNC theo file DXF, cộng với bộ khung viền nhôm định hình 2060 bao quanh.`
                   )
                 }
                 className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition"
